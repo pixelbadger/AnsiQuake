@@ -279,6 +279,9 @@ S_Init(void)
 void
 S_ClearOverflow()
 {
+    if (!known_sfx)
+	return;
+
     S_StopAllSounds(true);
     struct known_sfx *known = known_sfx->overflow;
 
