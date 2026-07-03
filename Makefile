@@ -1507,3 +1507,10 @@ endef
 bundles: $(ALL_BUNDLE_FILES)
 snapshot: $(SNAPSHOT_TARGET)
 tarball: $(DIST_DIR)/tyrquake-$(TYR_VERSION_NUM).tar.gz
+
+# ----------------------------------------------------------------------------
+# Convenience target: the ANSI terminal build (see README.md)
+
+.PHONY:	terminal
+terminal:
+	$(MAKE) bin/tyr-quake VID_TARGET=term IN_TARGET=term SND_TARGET=sdl
