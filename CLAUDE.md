@@ -40,6 +40,19 @@ scripts/ansidecode.py cap.bin 240 67 0.5   # capture -> frame_050.png to eyeball
 - Harness fps numbers at very large grids are drain-rate limited (pty
   buffer + 50ms select), so they understate real terminal performance.
 
+## Running interactively
+
+`scripts/run-foot.sh` launches a real Foot window sized so the terminal's
+pixel grid (cols × 2·rows) is at or above the 320×200 render floor (see
+`common/vid_term.c` below) — below that floor the renderer point-samples
+down to the physical grid and garbles HUD/console text; at or above it,
+1:1 with no scaling. Defaults to a 340×110 char / pixelsize=4 window
+(verified to fit a 1920×1080-class display); override with `FOOT_COLS`,
+`FOOT_ROWS`, `FOOT_PIXELSIZE` env vars if your display can't fit that, but
+keep `FOOT_COLS>=320` and `FOOT_ROWS>=100` — the script refuses to launch
+below that. Extra args pass through to `tyr-quake`, e.g.
+`scripts/run-foot.sh -nosound +timedemo demo1`.
+
 ## Architecture (the fork's code)
 
 - `common/term_tty.c` + `include/term_tty.h` — owns the tty: raw mode, alt
