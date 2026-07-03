@@ -1,4 +1,4 @@
-# SpectreDoom — Quake in your terminal
+# AnsiQuake — Quake in your terminal
 
 A fork of [TyrQuake](https://disenchant.net/tyrquake/) that renders Quake to an
 ANSI terminal at original game speed. Every character cell displays two pixels

@@ -1,4 +1,4 @@
-# SpectreDoom
+# AnsiQuake
 
 Fork of TyrQuake (upstream remote: `upstream` → https://github.com/sezero/tyrquake)
 that renders Quake to ANSI terminals with truecolor half-blocks (`▀`, fg=top
