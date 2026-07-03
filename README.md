@@ -50,6 +50,42 @@ second for an emergency exit. The terminal is restored even on crashes,
 
 Everything else is stock TyrQuake (software renderer lineage: WinQuake).
 
+## Development & testing
+
+The game refuses to start unless stdin is a terminal that answers the kitty
+keyboard protocol probe, so headless testing goes through
+`scripts/ptyharness.py`, which runs any command inside a pty of a chosen
+size, answers the probe, injects scripted key events, and captures the raw
+ANSI stream:
+
+```sh
+# Benchmark: run the standard timedemo at a 240x67 cell grid for 25s.
+# The fps line lands in ./console.log (stdout is diverted there in-game).
+QCOLS=240 QROWS=67 QTIME=25 QOUT=cap.bin \
+    scripts/ptyharness.py ./bin/tyr-quake -basedir . -nosound +timedemo demo1
+grep fps console.log
+
+# Inspect what was actually drawn: decode the capture into PNG snapshots
+# at 30%/70%/98% of the stream (needs python3-pil).
+scripts/ansidecode.py cap.bin 240 67 0.3,0.7,0.98
+
+# Drive the menu: send scripted keys (kitty CSI-u encoding, hex) —
+# ESC press+release at t=3s, Down arrow at t=4s.
+printf '%s\n' \
+    '3.0:1b5b32373b313a31751b5b32373b313a3375' \
+    '4.0:1b5b313b313a31421b5b313b313a3342' > input.txt
+QSCRIPT=input.txt QTIME=7 scripts/ptyharness.py ./bin/tyr-quake -basedir .
+```
+
+Baseline numbers (2026, 8-core x86-64, pty harness): `timedemo demo1` runs
+332 fps at 240×67 cells and ~72 fps at an extreme 800×200; normal play is
+capped by the engine at 72 fps, the original Quake speed limit.
+
+Debug build: `make bin/tyr-quake VID_TARGET=term IN_TARGET=term
+SND_TARGET=sdl DEBUG=Y`. Always `rm -rf build bin` when switching targets
+or toggling DEBUG — objects land in the same build directory. Upstream is
+tracked on the `upstream` remote (sezero/tyrquake) for future merges.
+
 ## License
 
 GPLv2, same as the id Software Quake source release and TyrQuake.
