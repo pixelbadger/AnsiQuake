@@ -163,11 +163,11 @@ Sys_Error(const char *error, ...)
     va_start(argptr, error);
     qvsnprintf(string, sizeof(string), error, argptr);
     va_end(argptr);
-    fprintf(stderr, "Error: %s\n", string);
-
 #ifndef SERVERONLY
+    /* Shut down first so vid drivers restore the display for the message */
     Host_Shutdown();
 #endif
+    fprintf(stderr, "Error: %s\n", string);
     exit(1);
 }
 

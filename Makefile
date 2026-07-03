@@ -959,6 +959,9 @@ ifeq ($(VID_TARGET),null)
 SW_OBJS += vid_null.o
 GL_OBJS += vid_null.o
 endif
+ifeq ($(VID_TARGET),term)
+SW_OBJS += vid_term.o term_tty.o
+endif
 
 # ----------------
 # 2. Input driver
@@ -981,6 +984,9 @@ CL_OBJS += in_sdl.o sdl_common.o
 endif
 ifeq ($(IN_TARGET),null)
 CL_OBJS += in_null.o
+endif
+ifeq ($(IN_TARGET),term)
+CL_OBJS += in_term.o term_tty.o
 endif
 
 # ----------------
