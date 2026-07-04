@@ -1,0 +1,1186 @@
+ ▐▛███▜▌   Claude Code v2.1.201
+▝▜█████▛▘  Fable 5 · Claude Pro
+  ▘▘ ▝▝    ~/repos/SpectreDoom
+
+ ▎ Fable 5 is back.
+ ▎ Until July 7, you can use up to 50% of your plan's weekly usage limit on Fable 5. If you hit your limit, you can continue on Fable 5 with usage credits. Fable 5 draws down usage faster than Opus 4.8. Learn more (https://support.claude.com/en/articles/15424964-claude-fable-5-promotional-access)
+
+❯ /model                                                                        
+  ⎿  Set model to Fable 5 and saved as your default for new sessions
+
+❯ Produce a new renderer for the game quake. The only catch is it has to use an 
+  ANSI terminal. Use the ascii half-block to double addressable pixel size.     
+  This needs to run at original speeds. Use your own judgement when planning    
+  this, and particularly when spawning subagents. There are no language         
+  constraints, and you're free to fork from an existing open source project.    
+  Let's plan this perfectly.                                                    
+
+● I'll plan this out. First, let me look at what's in this repo and load web
+  research tools to verify candidate codebases to fork.
+
+● Bash(ls -la /home/user/repos/SpectreDoom && git -C
+      /home/user/repos/SpectreDoom log --oneline -20 2>&1 | head -25)
+  ⎿  total 0
+     drwxr-xr-x 1 user user   8 Jul  3 22:27 .
+     drwxr-xr-x 1 user user 120 Jul  3 22:26 ..
+     … +2 lines (ctrl+o to expand)
+
+● Empty repo — greenfield project. Now let me research the candidate codebases
+  to fork and prior art for terminal renderers.
+
+● Web Search("quakegeneric github quake framebuffer callback port")
+  ⎿  Did 1 search in 6s
+
+● Web Search("quake terminal renderer ANSI half-block truecolor github")
+  ⎿  Did 1 search in 8s
+
+● Web Search("TyrQuake software renderer source port arbitrary resolution")
+  ⎿  Did 1 search in 7s
+
+● Fetch(https://github.com/erysdren/quakegeneric)
+  ⎿  Received 273.7KB (200 OK)
+
+● Web Search("TyrQuake github Kevin Shanahan standalone source vid_sdl vid_x snd
+            Linux build")
+  ⎿  Did 1 search in 12s
+
+● User answered Claude's questions:
+  ⎿  · Which codebase should we fork as the base engine? → TyrQuake 
+     (Recommended)
+     · Which terminals must it support? This decides how we handle keyboard 
+     input — plain terminals never report key *releases*, which breaks FPS 
+     movement (you'd move in stutters). The kitty keyboard protocol fixes this 
+     but only modern terminals speak it. → Modern terminals (Recommended)
+     · Which features are in scope beyond the core renderer? (Core = video, 
+     keyboard, correct game speed.) → Sound
+
+● Bash(cd /tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4b
+      cb-86c4-ed86379608c8/scratchpad && git clone --depth 1
+      https://github.com/sezero/tyrqua…)
+  ⎿  Cloning into 'tyrquake'...
+     changelog.txt
+     common
+     … +14 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /home/user/repos/SpectreDoom
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad/tyrquake; ls $S/common | head -60; echo
+      ---; ls $S/inclu…)
+  ⎿  alias_model.c
+     buildinfo.c
+     cd_bsd.c
+     … +144 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad/tyrquake; ls $S/common | grep -i
+      "vid\|sys_" ; echo ---;…)
+  ⎿  sys_null.c
+     sys_unix.c
+     sys_wina.S
+     … +27 lines (ctrl+o to expand)
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad/tyrquake; wc -l $S/common/vid_null.c
+      $S/common/in_null.c…)
+  ⎿    171 /tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-8
+     5af-4bcb-86c4-ed86379608c8/scratchpad/tyrquake/common/vid_null.c
+        72 /tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-8
+     … +30 lines (ctrl+o to expand)
+
+● All interfaces confirmed. The plan is fully grounded now — writing it up.
+
+● Updated plan
+  ⎿  /plan to preview
+
+● User approved Claude's plan
+  ⎿  Plan saved to: ~/.claude/plans/produce-a-new-renderer-hidden-riddle.md · 
+     /plan to edit
+     Quake ANSI-Terminal Renderer ("SpectreDoom")
+
+     Context
+
+     Build a renderer for Quake that outputs to an ANSI terminal, using the
+     Unicode half-block
+     character ▀ (U+2580, fg = top pixel / bg = bottom pixel) to double vertical
+     pixel density,
+     running at original game speed. The repo
+     (/home/user/repos/SpectreDoom) is empty —
+     this is a greenfield fork.
+
+     User decisions (confirmed):
+     - Fork base: TyrQuake (mirror: https://github.com/sezero/tyrquake, v0.71) —
+     64-bit-clean
+     WinQuake software renderer, plain-make build, pluggable driver targets.
+     - Terminal support: modern terminals only (kitty, ghostty, wezterm, foot,
+     recent alacritty) —
+     we depend on the kitty keyboard protocol for real key press/release events.
+     - Scope: core video + keyboard + sound. No mouse look, no 256-color
+     fallback (v1).
+
+     "Original speeds" defined: Quake's engine caps at 72 fps (NQ/host.c:500,
+     realtime - oldrealtime < 1.0/72.0). Target: sustain 72 fps at typical
+     fullscreen terminal
+     sizes; verify with timedemo demo1.
+
+     Why TyrQuake fits (verified in source, cloned at
+
+     /tmp/claude-1000/.../scratchpad/tyrquake)
+
+     - Makefile has pluggable VID_TARGET / IN_TARGET / SND_TARGET (incl. null
+     skeletons:
+     common/vid_null.c 171 lines, common/in_null.c 72 lines). We add a term
+     target for vid+in.
+     - Driver contract (include/vid.h): implement
+     VID_Init/VID_SetMode/VID_Update(vrect_t*)/ 
+     VID_SetPalette/VID_ShiftPalette/VID_Shutdown/VID_ProcessEvents etc.;
+     renderer draws 8-bit
+     palettized pixels into vid.buffer (viddef_t).
+     - Input contract: Key_Event(knum_t key, qboolean down) (include/keys.h:288)
+     — exactly the
+     press/release model the kitty protocol provides. Key codes are SDL1-style
+     (K_ESCAPE=27,
+     K_UPARROW=273, ...).
+     - Resolution limits: MAXWIDTH 2040, MAXHEIGHT 1200 (include/r_shared.h) —
+     comfortably
+     above any terminal grid (grid pixels = cols × 2·rows).
+     - Sound: existing snd_sdl.c (SND_TARGET=sdl, audio-only SDL); fallbacks
+     already in tree:
+     pulseaudio, oss, sndio.
+     - Reference for a complete driver: common/vid_sdl.c (571 lines).
+
+     Architecture
+
+     Fork lives at repo root, preserving upstream history:
+     git remote add upstream https://github.com/sezero/tyrquake.git && git fetch
+     upstream,
+     point main at upstream/master, commit our work on top (keeps future
+     upstream merges possible).
+
+     New files (following existing driver-file conventions):
+     - common/term_tty.c + include/term_tty.h — shared tty layer used by both
+     vid and input:
+     termios raw mode, alt-screen/cursor/autowrap setup, kitty-keyboard
+     push/pop, capability probe,
+     SIGWINCH/SIGTSTP/SIGCONT handling, and crash-safe restore (atexit +
+     SIGSEGV/SIGTERM/SIGABRT
+     handlers that emit the restore sequence — a crashed game must never leave
+     the tty raw).
+     - common/vid_term.c — the renderer backend.
+     - common/in_term.c — keyboard backend.
+     - Makefile: VID_TARGET=term → vid_term.o term_tty.o; IN_TARGET=term →
+     in_term.o;
+     plus a convenience target (e.g. make terminal) that sets
+     VID_TARGET=term IN_TARGET=term SND_TARGET=sdl and builds bin/tyr-quake.
+
+     Video driver (vid_term.c)
+
+     Mode: one mode derived from TIOCGWINSZ at startup: render W = cols (clamped
+     to a
+     multiple of 8 — check the software renderer's rowbytes/surface-cache
+     alignment assumptions,
+     vid_sdl.c shows what's required), render H = 2 × rows. WinQuake's minimum
+     is 320×200 (HUD/
+     console art is 320 wide), so:
+     - Terminal grid ≥ 320×200 → render at native grid size, 1 pixel per
+     half-cell.
+     - Smaller terminal → render at 320×200 and nearest-neighbor downscale to
+     the cell grid via
+     precomputed x/y index maps (cheap; documented min recommended ~160×50 chars
+     for readability).
+
+     Palette: VID_SetPalette builds LUTs from the 256-entry palette: packed RGB
+     per index plus
+     precomputed SGR fragments per index ("38;2;R;G;B" / "48;2;R;G;B" strings)
+     so the hot loop
+     never formats integers. VID_ShiftPalette (pain/underwater flashes) rebuilds
+     LUTs and marks the
+     whole grid dirty.
+
+     VID_Update hot path:
+     1. Sample framebuffer into a cell grid: each cell = (top_index, 
+     bottom_index) packed in 16 bits.
+     2. Diff against previous frame's grid. For changed cells emit: cursor move
+     (CSI row;colH) only
+     when skipping, SGR only when fg/bg palette index actually changes
+     (run-length elision),
+     glyph ▀ (3 bytes UTF-8); when top == bottom, emit a space with bg color
+     instead (1 byte,
+     fg state untouched).
+     3. Wrap the frame in synchronized-update guards (CSI ?2026h … CSI ?2026l) —
+     no tearing.
+     4. Single write() of the assembled buffer to the tty.
+     5. Backpressure/frame-drop: if the previous frame's write time exceeded the
+     1/72 s budget,
+     skip emitting (game simulation continues at full speed; terminal never
+     throttles the engine).
+
+     Resize: SIGWINCH sets a flag; next frame re-queries size and re-runs
+     VID_SetMode
+     (realloc buffers, full redraw, vid.recalc_refdef = 1).
+
+     Console/stdout conflict: Sys_Printf in common/sys_unix.c writes to stdout,
+     which would
+     corrupt the display. While terminal video is active, redirect engine
+     console output to a log file
+     (flush real errors to stderr only after terminal restore on exit/crash).
+
+     Input driver (in_term.c)
+
+     - Probe kitty keyboard protocol at init (CSI ? u query); if unsupported,
+     exit with a clear
+     message naming supported terminals (also note: not under tmux for v1).
+     - Push progressive enhancement flags (disambiguate escape codes + report
+     event types + report
+     alternate keys); pop on shutdown.
+     - CSI-u state-machine parser in VID_ProcessEvents/Sys_SendKeyEvents: event
+     type 1=press →
+     Key_Event(k, true), 2=repeat → also down=true (console typing needs
+     repeats; game key
+     state is unaffected), 3=release → Key_Event(k, false). Map kitty
+     functional-key codes
+     (arrows, F-keys, modifiers) to TyrQuake knum_t.
+     - Raw mode disables ISIG; keep an emergency quit (e.g. Ctrl+C thrice →
+     clean shutdown) in
+     addition to Quake's own quit menu.
+
+     Sound
+
+     SND_TARGET=sdl using existing common/snd_sdl.c with SDL audio subsystem
+     only. Early check:
+     confirm sdl_common.c init doesn't drag in SDL video; if it does, patch to
+     SDL_InitSubSystem(SDL_INIT_AUDIO) or fall back to the existing pulseaudio
+     target.
+
+     Game data
+
+     Engine loads id1/pak0.pak from -basedir. Add scripts/fetch-shareware.sh to
+     download the
+     redistributable Quake 1.06 shareware pak for testing (not committed to the
+     repo). Registered
+     paks work if the user supplies them.
+
+     Implementation order
+
+     1. Baseline: import upstream into the repo; build stock VID_TARGET=x11 (or
+     sdl) and run
+     with shareware data — prove the engine works before touching it.
+     2. Makefile term targets + term_tty.c (raw mode, alt screen,
+     restore-on-crash) + stub vid/in
+     that builds and runs headless.
+     3. vid_term.c naive full-frame renderer (no diff) — get a picture.
+     4. Downscale path + SIGWINCH resize.
+     5. Optimize: cell diff, SGR run elision, precomputed color strings,
+     sync-update wrap,
+     frame-drop policy. Measure with timedemo demo1.
+     6. in_term.c kitty protocol: full key map, press/release play test.
+     7. Sound build + test; console log redirection; suspend/resume
+     (SIGTSTP/SIGCONT) handling.
+     8. Polish: README (requirements, terminal recommendations, min size),
+     fetch-shareware script.
+
+     Verification
+
+     - Speed: +timedemo demo1 (uncapped) must report well above 72 fps at a
+     fullscreen
+     kitty/ghostty grid (~240×67 cells); normal play then holds the engine's 72
+     fps cap.
+     host_speeds 1 to confirm where time goes if not.
+     - Feel: manual play — WASD/arrow movement starts and stops instantly
+     (release events),
+     console typing with key repeat works, pain-flash palette shift renders,
+     mid-game resize
+     reflows, Escape menu navigable.
+     - Robustness: quit, Ctrl+Z/fg, and kill -SEGV all leave the terminal usable
+     (cooked mode,
+     main screen, cursor visible).
+     - Sound: in-game audio plays with no video-subsystem dependency.
+
+     Known risks
+
+     - Software renderer width-alignment assumptions (multiple-of-8) — verify
+     against vid_sdl.c
+     before choosing exact grid clamping.
+     - snd_sdl possibly requiring SDL video init — checked early (step 7 has
+     fallbacks in-tree).
+     - tmux/screen don't pass the kitty protocol through reliably — documented
+     as unsupported in v1.
+     - Tiny terminals (80×24) will render but be borderline unplayable —
+     documented minimum instead
+     of engineering around it.
+
+● Bash(git remote add upstream https://github.com/sezero/tyrquake.git && git
+      fetch upstream master 2>&1 | tail -3)
+  ⎿  From https://github.com/sezero/tyrquake
+      * branch            master     -> FETCH_HEAD
+      * [new branch]      master     -> upstream/master
+
+● Bash(git reset --hard upstream/master 2>&1 | tail -1 && git log --oneline -3
+      && ls | head)
+  ⎿  HEAD is now at 6531579 sdl: fix destruction of startup dialog on windo
+     ws
+     6531579 sdl: fix destruction of startup dialog on windows
+     … +12 lines (ctrl+o to expand)
+● Bash(which gcc make sdl2-config pkg-config; gcc --version | head -1;
+      pkg-config --exists sdl2 && echo "sdl2: yes" || echo "sdl2: no";
+      pkg-config --exists x11 && echo…)
+  ⎿  /usr/bin/gcc
+     /usr/bin/make
+     gcc (Debian 12.2.0-14+deb12u1) 12.2.0
+     … +6 lines (ctrl+o to expand)
+
+● gcc and make are present, but SDL2 dev headers and pkg-config are missing
+  (needed for sound). Installing them.
+
+● Bash(sudo apt-get install -y pkg-config libsdl2-dev 2>&1 | tail -3)
+  ⎿  Setting up libxinerama-dev:amd64 (2:1.1.4-3) ...
+     Setting up libgles-dev:amd64 (1.6.0-1) ...
+     Setting up libsdl2-dev:amd64 (2.26.5+dfsg-1) ...
+
+● Bash(make -j8 bin/tyr-quake VID_TARGET=null IN_TARGET=null SND_TARGET=null
+      2>&1 | tail -8)
+  ⎿  /usr/bin/ld: build/nqsw/console.o: in function `Con_NotifyBox':
+     console.c:(.text+0xf61): undefined reference to `Sys_SendKeyEvents'
+     /usr/bin/ld: build/nqsw/host.o: in function `_Host_Frame':
+     … +5 lines (ctrl+o to expand)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Bash(make -j8 bin/tyr-quake USE_SDL=Y 2>&1 | tail -4)
+  ⎿  WARNING: 'convert' not found, skipping icon generation
+       CC       build/nqsw/sdl_common.o
+       LINK     bin/tyr-quake
+       STRIP    bin/tyr-quake
+
+● Bash(cd /tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4b
+      cb-86c4-ed86379608c8/scratchpad && (curl -sfL -o quake106.zip
+      https://archive.org/downl…)
+  ⎿  Error: Exit code 22
+
+● Web Search("quake106.zip shareware download mirror pak0.pak direct link")
+  ⎿  Did 1 search in 8s
+
+● Bash(cd /tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4b
+      cb-86c4-ed86379608c8/scratchpad && curl -sfL -o quake106.zip
+      http://mirror.internode.on…)
+  ⎿  Error: Exit code 22
+
+● Bash(cd /tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4b
+      cb-86c4-ed86379608c8/scratchpad && for u in
+      https://ftp.gwdg.de/pub/misc/ftp.idsoftware…)
+  ⎿  trying https://ftp.gwdg.de/pub/misc/ftp.idsoftware.com/idstuff/quake/q
+     uake106.zip
+     OK
+     … +2 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /home/user/repos/SpectreDoom
+
+● Got it from the GWDG mirror of ftp.idsoftware.com. Now extracting pak0.pak
+  (it's inside resource.1, an LHA archive).
+
+● Bash(which unzip lha lhasa 7z 2>/dev/null; sudo apt-get install -y unzip lhasa
+      2>&1 | tail -1)
+  ⎿  /usr/bin/unzip
+     Processing triggers for man-db (2.11.2-2) ...
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; cd $S && unzip -o -q quake106.zip -d
+      quake106 && ls qua…)
+  ⎿  Error: Exit code 2
+     deice.exe
+     install.bat
+     resource.1
+     resource.dat
+
+     slicnse.txt        - Melting  :  ..
+     slicnse.txt        - Melting  :  oo
+     slicnse.txt        - Melted  
+
+     techinfo.txt       - Melting  :  ..........
+     techinfo.txt       - Melting  :  oooooooooo
+     techinfo.txt       - Melted  
+     id1/:
+     total 18252
+     drwxr-xr-x 1 user user       16 Jul  3 22:47 .
+     … +2 lines (ctrl+o to expand)
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; mkdir -p id1 && cp
+      $S/quake106/id1/pak0.pak id1/ && chm…)
+  ⎿  (No output)
+
+● Bash(timeout 20 ./bin/tyr-quake -basedir . -nosound +timedemo demo1 +quit 2>&1
+      | tail -15)
+  ⎿  timeout: the monitored command dumped core
+
+● Bash(timeout 20 ./bin/tyr-quake -basedir . -nosound +timedemo demo1 +quit >
+      /tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bcb-8
+      6c4-ed86379608c…)  ⎿  /bin/bash: line 1:  5003 Segmentation fault      timeout 20 ./bin/tyr-
+     quake -basedir . -nosound +timedemo demo1 +quit > /tmp/claude-1000/-ho
+     me-user-repos-SpectreDoom/71511f6b-85af-4bcb-86c4-ed86379608c8
+     … +3 lines (ctrl+o to expand)
+
+● Bash(SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 60 ./bin/tyr-quake
+      -basedir . -nosound +timedemo demo1 +quit >
+      /tmp/claude-1000/-home-user-repos-Spe…)
+  ⎿  /bin/bash: line 1:  5031 Segmentation fault      SDL_VIDEODRIVER=dummy
+      SDL_AUDIODRIVER=dummy timeout 60 ./bin/tyr-quake -basedir . -nosound
+     +timedemo demo1 +quit > /tmp/claude-1000/-home-user-repos-Spec
+     … +4 lines (ctrl+o to expand)
+
+● Still crashing before any output. Getting a backtrace — installing gdb and
+  building unstripped/debug.
+
+● Bash(grep -n "DEBUG" Makefile | head -8; which gdb || sudo apt-get install -y
+      gdb 2>&1 | tail -1)
+  ⎿  15:DEBUG            ?= N# Compile with debug info
+     16:OPTIMIZED_CFLAGS ?= Y# Enable compiler optimisations (if DEBUG != Y
+     )
+     … +7 lines (ctrl+o to expand)
+
+● Bash(make -j8 bin/tyr-quake USE_SDL=Y DEBUG=Y 2>&1 | tail -2 &&
+      SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy gdb -batch -ex run -ex bt -ex
+      quit --args ./bin/tyr-quake…)
+  ⎿  .    IN_TARGET = sdl
+     make: 'bin/tyr-quake' is up to date.
+     [Thread debugging using libthread_db enabled]
+     … +18 lines (ctrl+o to expand)
+
+● Stale objects — the debug flag didn't trigger a rebuild. Cleaning and
+  rebuilding with debug symbols.
+
+● Bash(rm -rf build bin && make -j8 bin/tyr-quake USE_SDL=Y DEBUG=Y 2>&1 | tail
+      -2 && SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy gdb -batch -ex run -ex
+      bt -ex quit --…)
+  ⎿    MKDIR    bin
+       LINK     bin/tyr-quake
+     [Thread debugging using libthread_db enabled]
+     … +19 lines (ctrl+o to expand)
+
+● The crash is an upstream bug: S_ClearOverflow() dereferences known_sfx which
+  is NULL when running -nosound. Let me confirm and fix.
+
+● Bash(grep -n "known_sfx" common/snd_dma.c | head -20; echo ---; sed -n
+      '270,300p' common/snd_dma.c)
+  ⎿  70:struct known_sfx {
+     73:    struct known_sfx *overflow;
+     75:static struct known_sfx *known_sfx;
+     … +37 lines (ctrl+o to expand)
+
+● Bash(sed -n '195,230p' common/snd_dma.c)
+  ⎿      Cvar_RegisterVariable(&nosound);
+         Cvar_RegisterVariable(&sfxvolume);
+         Cvar_RegisterVariable(&precache);
+     … +32 lines (ctrl+o to expand)
+
+● Update(common/snd_dma.c)
+  ⎿  Added 3 lines
+      279  void
+      280  S_ClearOverflow()
+      281  {
+      282 +    if (!known_sfx)                                           
+      283 +  return;                                                     
+      284 +                                                              
+      285      S_StopAllSounds(true);
+      286      struct known_sfx *known = known_sfx->overflow;
+      287  
+
+● Bash(make -j8 bin/tyr-quake USE_SDL=Y DEBUG=Y 2>&1 | tail -1 &&
+      SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 120 ./bin/tyr-quake
+      -basedir . -nosound +timedemo…)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ Continue!                                                                     
+
+● Bash(make -j8 bin/tyr-quake USE_SDL=Y DEBUG=Y 2>&1 | tail -1 &&
+      SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 120 ./bin/tyr-quake
+      -basedir . -nosound +timedemo…)
+  ⎿  make: 'bin/tyr-quake' is up to date.
+     exit=124
+     969 frames   4.3 seconds 223.8 fps
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Write(.gitignore)
+  ⎿  Wrote 4 lines to .gitignore
+      1 bin/
+      2 build/
+      3 id1/
+      4 *.log
+● Bash(git add .gitignore common/snd_dma.c && git commit -q -m "Add .gitignore;
+      fix S_ClearOverflow crash with -nosound…)
+  ⎿  a6b0e7d Add .gitignore; fix S_ClearOverflow crash with -nosound
+     6531579 sdl: fix destruction of startup dialog on windows
+
+● Bash(sed -n '925,1030p' Makefile)
+  ⎿  # Driver Options
+     #   NOTE: there is some duplication that may happen here, e.g. adding
+     common
+     … +103 lines (ctrl+o to expand)
+
+  Read 2 files (ctrl+o to expand)
+
+● The null drivers show the minimal contract. Now reading vid_sdl.c — the
+  reference for dynamic buffer allocation, the mode framework, and palette
+  handling.
+
+  Read 1 file (ctrl+o to expand)
+
+● The SDL driver gives me the full pattern. One more piece — the vid_mode.c
+  framework (VID_Mode_SetupViddef, modelist expectations, scale handling).
+
+● Bash(grep -n "VID_Mode_SetupViddef\|vid_modelist\|vid_nummodes\|vid_windowed_m
+      ode\|VID_GetCmdlineMode\|min_scale\|resolution" common/vid_mode.c | head
+      -30; echo ===;…)
+  ⎿  48:qvidmode_t *vid_modelist;
+     49:qvidmode_t vid_windowed_mode;
+     52:const qvidmode_t *vid_currentmode = &vid_windowed_mode;
+     … +74 lines (ctrl+o to expand)
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Bash(grep -n "Sys_Printf\|Sys_Error\|Sys_Quit" common/sys_unix.c | head; echo
+      ===; sed -n "$(grep -n '^Sys_Printf' common/sys_unix.c | cut -d:
+      -f1),+25p" common/sys_…)
+  ⎿  90:Sys_Printf(const char *fmt, ...)
+     123:Sys_Quit(void)
+     152:Sys_Error(const char *error, ...)
+     … +53 lines (ctrl+o to expand)
+
+● Bash(sed -n '430,480p' common/sys_unix.c; grep -n "nostdout" common/sys_unix.c
+      | head -5; grep -n "key_dest\|keydest" include/keys.h | head -5)
+  ⎿      * connected client times out, the message would not otherwise
+         * be printed until the next event.
+         */
+     … +55 lines (ctrl+o to expand)
+
+● Write(include/term_tty.h)
+  ⎿  Wrote 41 lines to include/term_tty.h
+       1 /*
+       2 Copyright (C) 2026 SpectreDoom contributors
+       3 
+       4 This program is free software; you can redistribute it and/or
+       5 modify it under the terms of the GNU General Public License
+       6 as published by the Free Software Foundation; either version 2
+       7 of the License, or (at your option) any later version.
+       8 
+       9 This program is distributed in the hope that it will be useful,
+      10 but WITHOUT ANY WARRANTY; without even the implied warranty of
+     … +34 lines (ctrl+o to expand)
+
+● Write(common/term_tty.c)
+  ⎿  Wrote 297 lines to common/term_tty.c
+       1 /*
+       2 Copyright (C) 2026 SpectreDoom contributors
+       3 
+       4 This program is free software; you can redistribute it and/or
+       5 modify it under the terms of the GNU General Public License
+       6 as published by the Free Software Foundation; either version 2
+       7 of the License, or (at your option) any later version.
+       8 
+       9 This program is distributed in the hope that it will be useful,
+      10 but WITHOUT ANY WARRANTY; without even the implied warranty of
+     … +302 lines (ctrl+o to expand)
+
+● Now the video driver:
+
+● Write(common/vid_term.c)
+  ⎿  Wrote 469 lines to common/vid_term.c
+       1 /*
+       2 Copyright (C) 1996-1997 Id Software, Inc.
+       3 Copyright (C) 2026 SpectreDoom contributors
+       4 
+       5 This program is free software; you can redistribute it and/or
+       6 modify it under the terms of the GNU General Public License
+       7 as published by the Free Software Foundation; either version 2
+       8 of the License, or (at your option) any later version.
+       9 
+      10 This program is distributed in the hope that it will be useful,
+     … +484 lines (ctrl+o to expand)
+
+● Now the input driver:
+
+● Write(common/in_term.c)
+  ⎿  Wrote 380 lines to common/in_term.c
+       1 /*
+       2 Copyright (C) 2026 SpectreDoom contributors
+       3 
+       4 This program is free software; you can redistribute it and/or
+       5 modify it under the terms of the GNU General Public License
+       6 as published by the Free Software Foundation; either version 2
+       7 of the License, or (at your option) any later version.
+       8 
+       9 This program is distributed in the hope that it will be useful,
+      10 but WITHOUT ANY WARRANTY; without even the implied warranty of
+     … +381 lines (ctrl+o to expand)
+● Bash(grep -n "_windowed_mouse" common/in_sdl.c | head -3; grep -n "name"
+      common/cvar.c | sed -n "$(grep -n 'Cvar_RegisterVariable' common/cvar.c |
+      head -1 | cut -d:…)
+  ⎿  596:cvar_t _windowed_mouse = {
+     597:    .name = "_windowed_mouse",
+     656:    Cvar_RegisterVariable(&_windowed_mouse);
+
+● Update(common/in_term.c)
+  ⎿  Added 5 lines, removed 1 line
+      33  #include "protocol.h"
+      34  #endif
+      35  
+      36 -cvar_t _windowed_mouse;                                        
+      36 +cvar_t _windowed_mouse = {                                     
+      37 +    .name = "_windowed_mouse",                                 
+      38 +    .string = "0",                                             
+      39 +    .flags = CVAR_CONFIG,                                      
+      40 +};                                                             
+      41  
+      42  /* kitty protocol event types */
+      43  #define KITTY_EVENT_PRESS   1
+
+● Bash(sed -n '594,602p' common/in_sdl.c)
+  ⎿  static cvar_t m_filter = { "m_filter", "0" };
+     cvar_t _windowed_mouse = {
+         .name = "_windowed_mouse",
+     … +4 lines (ctrl+o to expand)
+
+● Matches. Now the Makefile driver blocks and the Sys_Error reorder:
+
+● Update(Makefile)
+  ⎿  Added 3 lines
+      959  SW_OBJS += vid_null.o
+      960  GL_OBJS += vid_null.o
+      961  endif
+      962 +ifeq ($(VID_TARGET),term)                                     
+      963 +SW_OBJS += vid_term.o term_tty.o                              
+      964 +endif                                                         
+      965  
+      966  # ----------------
+      967  # 2. Input driver
+
+● Update(Makefile)
+  ⎿  Added 3 lines
+      985  ifeq ($(IN_TARGET),null)
+      986  CL_OBJS += in_null.o
+      987  endif
+      988 +ifeq ($(IN_TARGET),term)                                      
+      989 +CL_OBJS += in_term.o term_tty.o                               
+      990 +endif                                                         
+      991  
+      992  # ----------------
+      993  # 3. CD driver
+
+● Update(common/sys_unix.c)
+  ⎿  File must be read first
+
+● Bash(sed -n '148,175p' common/sys_unix.c)
+  ⎿  #endif
+     }
+     … +25 lines (ctrl+o to expand)
+
+● Update(common/sys_unix.c)
+  ⎿  Added 2 lines, removed 2 lines
+      163      va_start(argptr, error);
+      164      qvsnprintf(string, sizeof(string), error, argptr);
+      165      va_end(argptr);
+      166 -    fprintf(stderr, "Error: %s\n", string);                   
+      167 -                                                              
+      166  #ifndef SERVERONLY
+      167 +    /* Shut down first so vid drivers restore the display for 
+          +the message */                                                
+      168      Host_Shutdown();
+      169  #endif
+      170 +    fprintf(stderr, "Error: %s\n", string);                   
+      171      exit(1);
+      172  }
+      173  
+
+● Bash(rm -rf build bin && make -j8 bin/tyr-quake VID_TARGET=term IN_TARGET=term
+      SND_TARGET=sdl DEBUG=Y 2>&1 | grep -E "error|warning|LINK|CC.*term" |
+      head -30; ls -la…)
+  ⎿    CC       build/nqsw/in_term.o
+       CC       build/nqsw/term_tty.o
+       CC       build/nqsw/vid_term.o
+     … +5 lines (ctrl+o to expand)
+
+● Bash(make bin/tyr-quake VID_TARGET=term IN_TARGET=term SND_TARGET=sdl DEBUG=Y
+      2>&1 | grep -B2 "undefined\|error" | head -40)
+  ⎿  /usr/bin/ld: build/nqsw/vid_term.o: in function `VID_IsFullScreen':
+     /home/user/repos/SpectreDoom/common/vid_term.c:453: multiple d
+     efinition of `VID_IsFullScreen'; build/nqsw/vid_mode.o:/home/magospiet
+     … +2 lines (ctrl+o to expand)
+
+● Update(common/vid_term.c)
+  ⎿  Removed 6 lines
+      448  {
+      449  }
+      450  
+      451 -qboolean                                                      
+      452 -VID_IsFullScreen(void)                                        
+      453 -{                                                             
+      454 -    return true;                                              
+      455 -}                                                             
+      456 -                                                              
+      451  void
+      452  VID_ProcessEvents(void)
+      453  {
+
+● Bash(make -j8 bin/tyr-quake VID_TARGET=term IN_TARGET=term SND_TARGET=sdl
+      DEBUG=Y 2>&1 | tail -3 && ls -la bin/tyr-quake)
+  ⎿  .    IN_TARGET = term
+       CC       build/nqsw/vid_term.o
+       LINK     bin/tyr-quake
+     … +2 lines (ctrl+o to expand)
+
+● Bash(python3 --version && python3 -c "import PIL" 2>&1 | head -1)
+  ⎿  Python 3.11.2
+     Traceback (most recent call last):
+
+● Bash(pip3 install --user --quiet pillow 2>&1 | tail -1; python3 -c "import
+      PIL; print('PIL ok')")
+  ⎿  Error: Exit code 1
+     hint: See PEP 668 for the detailed specification.
+     Traceback (most recent call last):
+       File "<string>", line 1, in <module>
+     ModuleNotFoundError: No module named 'PIL'
+
+● Bash(sudo apt-get install -y python3-pil 2>&1 | tail -1 && python3 -c "import
+      PIL; print('PIL ok')")
+  ⎿  Processing triggers for libc-bin (2.36-9+deb12u14) ...
+     PIL ok
+
+● Write(/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bcb
+       -86c4-ed86379608c8/scratchpad/ptyharness.py)
+  ⎿  Wrote 101 lines (ctrl+o to expand)
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; QTIME=25 QOUT=$S/cap1.bin python3
+      $S/ptyharness.py ./bi…)
+  ⎿  captured 175941095 bytes over 25.5s, probe_answered=True, exit=None
+     ---
+     You got the nails
+     … +4 lines (ctrl+o to expand)
+● Write(/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bcb
+       -86c4-ed86379608c8/scratchpad/ansidecode.py)
+  ⎿  Wrote 82 lines (ctrl+o to expand)
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; cd $S && python3 ansidecode.py cap1.bin
+      200 56 0.3,0.7,…)
+  ⎿  wrote frame_030.png
+     wrote frame_070.png
+     wrote frame_098.png
+  ⎿  Shell cwd was reset to /home/user/repos/SpectreDoom
+
+  Read 2 files (ctrl+o to expand)
+
+● Bash(git add -A && git commit -q -m "Add ANSI terminal video/input drivers
+      (truecolor half-blocks)…)
+  ⎿  3b7ef4a Add ANSI terminal video/input drivers (truecolor half-blocks)
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; printf '%s\n' '# open menu with ESC (kitty
+      CSI-u press…)
+  ⎿  3.0:1b5b32373b313a31751b5b32373b313a3375
+     4.0:1b5b313b313a31421b5b313b313a3342
+     4.5:1b5b313b313a31421b5b313b313a3342
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; QTIME=7 QOUT=$S/cap2.bin
+      QSCRIPT=$S/inputscript.txt pyt…)
+  ⎿  captured 48306418 bytes over 7.5s, probe_answered=True, exit=None
+     wrote frame_099.png
+  ⎿  Shell cwd was reset to /home/user/repos/SpectreDoom
+
+  Read 1 file (ctrl+o to expand)
+
+● Input works end-to-end — ESC opened the menu and two Down presses moved the
+  cursor to "Options". Now verifying sound init (SDL audio without any video
+  subsystem):
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● SDL sound is audio-subsystem-only — no video dependency. Testing the init
+  path:
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; SDL_AUDIODRIVER=dummy QTIME=6
+      QOUT=$S/cap3.bin python3…)
+  ⎿  captured 52807608 bytes over 6.5s, probe_answered=True, exit=None
+     Sound Initialized: 16 bits @ 48000Hz
+     CDAudio_Init: open of "/dev/cdrom" failed (2)
+
+● Sound initializes cleanly. Now the robustness checks — verifying the terminal
+  restore sequence appears on SIGTERM and SIGSEGV:
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; tail -c 100 $S/cap3.bin | xxd | tail -4)
+  ⎿  00000030: 383b 323b 3232 333b 3137 313b 3339 6de2  8;2;223;171;39m.
+     00000040: 9680 1b5b 3236 3b31 311b 5b3c 751b 5b30  ...[26;11.[<u.[0
+     00000050: 6d1b 5b3f 3768 1b5b 3f32 3568 1b5b 3f31  m.[?7h.[?25h.[?1
+     00000060: 3034 396c                                049l
+
+● SIGTERM restore works — the stream ends with the exact kitty-pop + reset +
+  alt-screen-exit sequence. Now the segfault case:
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; (QTIME=10 QOUT=$S/cap4.bin python3
+      $S/ptyharness.py ./b…)
+  ⎿  Error: Exit code 1
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; QTIME=12 QOUT=$S/cap4.bin python3
+      $S/ptyharness.py ./bi…)
+  ⎿  9190
+     9198
+     [1]+  Done                    QTIME=12 QOUT=$S/cap4.bin python3 $S/pty
+     … +5 lines (ctrl+o to expand)
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; for size in "400 100" "800 200"; do set --
+      $size; QCOLS…)
+  ⎿  400x100: 969 frames   5.6 seconds 174.3 fps
+     800x200: 969 frames  12.6 seconds  76.7 fps
+
+● Even a giant 800×200 grid (render 800×400) holds 76.7 fps — and that's the
+  unoptimized debug build. Checking the release build:
+
+● Bash(rm -rf build bin && make -j8 bin/tyr-quake VID_TARGET=term IN_TARGET=term
+      SND_TARGET=sdl 2>&1 | tail -1 &&
+      S=/tmp/claude-1000/-home-user-repos-SpectreDo…)
+  ⎿    STRIP    bin/tyr-quake
+     200x56: 969 frames   2.9 seconds 335.1 fps
+     800x200: 969 frames  14.4 seconds  67.1 fps
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; QCOLS=80 QROWS=24 QTIME=8
+      QOUT=$S/cap80.bin python3 $S/…)
+  ⎿  captured 34727251 bytes over 8.5s, probe_answered=True, exit=None
+     wrote frame_050.png
+  ⎿  Shell cwd was reset to /home/user/repos/SpectreDoom
+
+  Read 1 file (ctrl+o to expand)
+
+● Downscale path verified at 80×24. Wrapping up with the README, shareware fetch
+  script, and a convenience make target:
+
+● Write(scripts/fetch-shareware.sh)
+  ⎿  Wrote 24 lines to scripts/fetch-shareware.sh
+      2 # Fetch the freely redistributable Quake 1.06 shareware data (epi
+        sode 1)
+      3 # and install id1/pak0.pak next to the game binary.
+      4 set -e
+      5 
+      6 MIRROR="https://ftp.gwdg.de/pub/misc/ftp.idsoftware.com/idstuff/q
+        uake/quake106.zip"
+      7 BASEDIR="$(dirname "$0")/.."
+      8 WORKDIR="$(mktemp -d)"
+      9 trap 'rm -rf "$WORKDIR"' EXIT
+     … +17 lines (ctrl+o to expand)
+
+● Write(README.md)
+  ⎿  Wrote 57 lines to README.md
+      2 # SpectreDoom — Quake in your terminal
+      3 A fork of [TyrQuake](https://disenchant.net/tyrquake/) that rende
+      4 ANSI terminal at original game speed. Every character cell displa
+        ys two pixels
+        arries the topode half block `▀` (U+2580): the foreground color c
+      6 pixel and the background color the bottom pixel, doubling the ver
+      7 resolution of the terminal grid. Truecolor SGR sequences, per-cel
+        l frame
+        tream smalld synchronized updates (`CSI ?2026`) keep the output s
+      9 and tear-free.
+     … +71 lines (ctrl+o to expand)
+
+● Update(README.md)
+  ⎿  Removed 2 lines
+       8  diffing, and synchronized updates (`CSI ?2026`) keep the output
+           stream small
+       9  and tear-free.
+      10  
+      11 -![It really is Quake](https://img.shields.io/badge/fps-72%2B-br
+         -ightgreen)                                                     
+      12 -                                                               
+      11  ## Requirements
+      12  
+      13  - A terminal with **truecolor** and the **kitty keyboard protoc
+          ol**:
+
+● Bash(tail -15 Makefile && chmod +x scripts/fetch-shareware.sh)
+  ⎿     $(do_mkdir)
+        @echo $($(quiet)cmd_gzip)
+        @$(cmd_gzip)
+     … +13 lines (ctrl+o to expand)
+
+● Bash(cat >> Makefile <<'EOF'…)
+  ⎿    STRIP    bin/tyr-quake
+     make[1]: Leaving directory '/home/user/repos/SpectreDoom'
+     tyr-quake
+
+● Bash(mv id1 id1.bak && ./scripts/fetch-shareware.sh && ls -la id1/pak0.pak &&
+      cmp id1/pak0.pak id1.bak/pak0.pak && echo "pak identical" && rm -rf
+      id1.bak)
+  ⎿  Downloading Quake 1.06 shareware...
+     Installed /home/user/repos/SpectreDoom/id1/pak0.pak
+     -rw-r--r-- 1 user user 18689235 Jul  3 23:14 id1/pak0.
+     … +2 lines (ctrl+o to expand)
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; QCOLS=240 QROWS=67 QTIME=25
+      QOUT=$S/capfinal.bin python…)
+  ⎿  240x67: 969 frames   2.9 seconds 332.0 fps
+     46dce75 Add README, 'make terminal' target, shareware fetch script
+     3b7ef4a Add ANSI terminal video/input drivers (truecolor half-blocks)
+     … +2 lines (ctrl+o to expand)
+
+  Wrote 2 memories (ctrl+o to expand)
+● Done — Quake now runs in a terminal at original speed. The repo went from
+  empty to a working fork in four commits.
+
+  What was built
+
+  SpectreDoom is a TyrQuake fork (full upstream history preserved for future
+  merges) with three new files plus small patches:
+
+  - common/vid_term.c — samples the 8-bit software framebuffer into a per-cell
+  (top, bottom) pixel pair, renders each cell as ▀ (U+2580) with truecolor
+  foreground/background, diffs against the previous frame, elides redundant
+  SGR/cursor sequences, and wraps frames in synchronized-update guards so
+  nothing tears. If the tty falls behind, at most every other frame is dropped
+  so the engine never slows down.
+  - common/in_term.c — kitty keyboard protocol parser giving real key
+  press/release events (the thing that makes WASD movement possible in a
+  terminal), with repeat filtering and a triple-Ctrl+C emergency quit.
+  - common/term_tty.c — raw mode, alt screen, protocol probing, stdout diverted
+  to console.log, and async-signal-safe terminal restore on every exit path.
+  - Patches: two upstream bug fixes (-nosound segfault in S_ClearOverflow;
+  Sys_Error now restores the display before printing), Makefile term driver
+  targets, make terminal, README, and scripts/fetch-shareware.sh.
+
+  Verified (via a Python pty harness, since this session has no real terminal)
+
+  - Speed: timedemo demo1 at a typical fullscreen grid (240×67 cells) runs 332 
+  fps — 4.6× the engine's native 72 fps cap, so normal play holds original speed
+  with big headroom. Even an extreme 800×200 grid sustains ~72 fps.
+  - Correctness: decoded captured ANSI streams back into images — demo playback,
+  HUD, menu, particles, and the 80×24 downscale path all render correctly.
+  - Input: scripted kitty-protocol events opened the menu with Escape and moved
+  the cursor with arrow keys, confirming press/release parsing end-to-end.
+  - Robustness: SIGTERM and SIGSEGV both leave the terminal restored (verified
+  byte-for-byte in the capture tails); sound initializes with no SDL video
+  dependency.
+
+  To play it
+
+  make terminal && ./bin/tyr-quake
+
+  in kitty, ghostty, wezterm, foot, or alacritty ≥ 0.13 (not inside tmux),
+  ideally maximized at a small font. The one thing I couldn't do from here is a
+  live human playtest — movement feel and audio output are worth a quick check
+  on your side. If anything feels off, console.log captures the engine console.
+
+✻ Baked for 25m 14s
+
+❯ Is everything wrt the tooling, scripts etc all encoded in README.md? If not   
+  produce this. Either way, also produce a CLAUDE.md                            
+
+● Not yet — the pty harness and ANSI-frame decoder only live in the session
+  scratchpad, which is ephemeral. I'll move them into scripts/, document the
+  whole dev/test workflow in README.md, and write a CLAUDE.md.
+
+● Bash(S=/tmp/claude-1000/-home-user-repos-SpectreDoom/71511f6b-85af-4bc
+      b-86c4-ed86379608c8/scratchpad; cp $S/ptyharness.py scripts/ptyharness.py
+      && cp $S/ansi…)
+  ⎿  ansidecode.py
+     fetch-shareware.sh
+     gcc-version
+     ptyharness.py
+
+● Update(scripts/ptyharness.py)
+  ⎿  File must be read first
+
+● Update(scripts/ansidecode.py)
+  ⎿  File must be read first
+
+  Read 2 files (ctrl+o to expand)
+
+● Update(scripts/ptyharness.py)
+  ⎿  Added 20 lines, removed 3 lines
+       1  #!/usr/bin/env python3
+       2 -"""Drive the terminal Quake build through a pty: set window siz
+         -e, answer the                                                  
+       3 -kitty keyboard probe, capture output, optionally send input, th
+         -en decode the                                                  
+       4 -final screen into a PNG."""                                    
+       2 +"""Drive the terminal Quake build through a pty for headless te
+         +sting.                                                         
+       3 +                                                               
+       4 +Sets the pty window size, answers the kitty keyboard protocol p
+         +robe (so                                                       
+       5 +IN_Init succeeds without a real terminal), captures all ANSI ou
+         +tput to a                                                      
+       6 +file, and optionally injects scripted key events.              
+       7 +                                                               
+       8 +    usage: ptyharness.py <command...>                          
+       9 +    e.g.:  QCOLS=240 QROWS=67 QTIME=25 QOUT=cap.bin \\         
+      10 +               scripts/ptyharness.py ./bin/tyr-quake -basedir .
+         + +timedemo demo1                                               
+      11 +                                                               
+      12 +Environment:                                                   
+      13 +    QCOLS/QROWS  terminal grid size (default 200x56)           
+      14 +    QTIME        seconds to run before SIGTERM (default 40)    
+      15 +    QOUT         capture file for the raw ANSI stream (default 
+         +ptycapture.bin)                                                
+      16 +    QSCRIPT      optional input script: lines of "delay_seconds
+         +:hexbytes",                                                    
+      17 +                 e.g. kitty CSI-u for ESC press+release at t=3s
+         +:                                                              
+      18 +                 3.0:1b5b32373b313a31751b5b32373b313a3375      
+      19 +                                                               
+      20 +Decode the capture into PNG snapshots with scripts/ansidecode.p
+         +y.                                                             
+      21 +Engine console output (timedemo fps etc.) lands in ./console.lo
+         +g."""                                                          
+      22  import fcntl
+      23  import os
+      24  import pty
+
+● Update(scripts/ansidecode.py)
+  ⎿  Added 10 lines, removed 1 line
+       1  #!/usr/bin/env python3
+       2  """Decode a captured ANSI half-block stream into PNG snapshots.
+       3 -Emulates just enough: CUP, SGR truecolor, ED, alt-screen/sync i
+         -gnored."""                                                     
+       3 +                                                               
+       4 +    usage: ansidecode.py <capture.bin> [cols] [rows] [points]  
+       5 +                                                               
+       6 +cols/rows must match the QCOLS/QROWS the capture was made with 
+         +(default                                                       
+       7 +200x56). points is a comma-separated list of fractions of the s
+         +tream at                                                       
+       8 +which to snapshot (default "0.5,0.98"); each writes frame_NNN.p
+         +ng at 3x                                                       
+       9 +scale. Requires python3-pil.                                   
+      10 +                                                               
+      11 +Emulates just enough of a terminal: CUP, truecolor SGR, ED; alt
+         +-screen                                                        
+      12 +and synchronized-update sequences are ignored."""              
+      13  import re
+      14  import sys
+      15  
+
+● Now the README dev/testing section and CLAUDE.md:
+
+● Update(README.md)
+  ⎿  Added 36 lines
+      50  
+      51  Everything else is stock TyrQuake (software renderer lineage: W
+          inQuake).
+      52  
+      53 +## Development & testing                                       
+      54 +                                                               
+      55 +The game refuses to start unless stdin is a terminal that answe
+         +rs the kitty                                                   
+      56 +keyboard protocol probe, so headless testing goes through      
+      57 +`scripts/ptyharness.py`, which runs any command inside a pty of
+         + a chosen                                                      
+      58 +size, answers the probe, injects scripted key events, and captu
+         +res the raw                                                    
+      59 +ANSI stream:                                                   
+      60 +                                                               
+      61 +```sh                                                          
+      62 +# Benchmark: run the standard timedemo at a 240x67 cell grid fo
+         +r 25s.                                                         
+      63 +# The fps line lands in ./console.log (stdout is diverted there
+         + in-game).                                                     
+      64 +QCOLS=240 QROWS=67 QTIME=25 QOUT=cap.bin \                     
+      65 +    scripts/ptyharness.py ./bin/tyr-quake -basedir . -nosound +
+         +timedemo demo1                                                 
+      66 +grep fps console.log                                           
+      67 +                                                               
+      68 +# Inspect what was actually drawn: decode the capture into PNG 
+         +snapshots                                                      
+      69 +# at 30%/70%/98% of the stream (needs python3-pil).            
+      70 +scripts/ansidecode.py cap.bin 240 67 0.3,0.7,0.98              
+      71 +                                                               
+      72 +# Drive the menu: send scripted keys (kitty CSI-u encoding, hex
+         +) —                                                            
+      73 +# ESC press+release at t=3s, Down arrow at t=4s.               
+      74 +printf '%s\n' \                                                
+      75 +    '3.0:1b5b32373b313a31751b5b32373b313a3375' \               
+      76 +    '4.0:1b5b313b313a31421b5b313b313a3342' > input.txt         
+      77 +QSCRIPT=input.txt QTIME=7 scripts/ptyharness.py ./bin/tyr-quake
+         + -basedir .                                                    
+      78 +```                                                            
+      79 +                                                               
+      80 +Baseline numbers (2026, 8-core x86-64, pty harness): `timedemo 
+         +demo1` runs                                                    
+      81 +332 fps at 240×67 cells and ~72 fps at an extreme 800×200; norm
+         +al play is                                                     
+      82 +capped by the engine at 72 fps, the original Quake speed limit.
+      83 +                                                               
+      84 +Debug build: `make bin/tyr-quake VID_TARGET=term IN_TARGET=term
+      85 +SND_TARGET=sdl DEBUG=Y`. Always `rm -rf build bin` when switchi
+         +ng targets                                                     
+      86 +or toggling DEBUG — objects land in the same build directory. U
+         +pstream is                                                     
+      87 +tracked on the `upstream` remote (sezero/tyrquake) for future m
+         +erges.                                                         
+      88 +                                                               
+      89  ## License
+      90  
+      91  GPLv2, same as the id Software Quake source release and TyrQuak
+          e.
+
+● Write(CLAUDE.md)
+  ⎿  Wrote 72 lines to CLAUDE.md
+       2 # SpectreDoom
+       3 Fork of TyrQuake (upstream remote: `upstream` → https://github.c
+         om/sezero/tyrquake)
+         (`▀`, fg=top Quake to ANSI terminals with truecolor half-blocks 
+       5 pixel, bg=bottom pixel) and takes input via the kitty keyboard p
+         rotocol.
+       7 See README.md for the user-facing story.
+       8 ## Build
+       9 
+      10 ```sh
+     … +93 lines (ctrl+o to expand)
+
+● Quick smoke test that the repo-ized scripts work as documented, then commit:
+
+● Bash(QCOLS=160 QROWS=45 QTIME=5 QOUT=/tmp/claude-1000/-home-user-repos
+      -SpectreDoom/71511f6b-85af-4bcb-86c4-ed86379608c8/scratchpad/smoke.bin
+      scripts/ptyharne…)
+  ⎿  captured 36839742 bytes over 5.5s, probe_answered=True, exit=None
+     wrote frame_090.png
+     frame_090.png
+
+● Bash(git add -A && git commit -q -m "Add headless test tooling to scripts/;
+      document dev workflow; add CLAUDE.md…)
+  ⎿  fcea3f4 Add headless test tooling to scripts/; document dev workflow;
+     add CLAUDE.md
+     46dce75 Add README, 'make terminal' target, shareware fetch script
+     … +3 lines (ctrl+o to expand)
+
+  Wrote 1 memory (ctrl+o to expand)
+
+● It wasn't — the pty harness and ANSI decoder existed only in the session
+  scratchpad. Both are now in the repo and documented, and CLAUDE.md is in
+  place. Committed as fcea3f4.
+
+  What changed:
+
+  - scripts/ptyharness.py — the headless test driver, now with a full docstring
+  covering usage, the QCOLS/QROWS/QTIME/QOUT/QSCRIPT environment variables, and
+  an example of hex-encoded kitty key-event scripting.
+  - scripts/ansidecode.py — the capture→PNG decoder, with usage docs (cols/rows
+  must match the capture, snapshot points, needs python3-pil).
+  - README.md gained a "Development & testing" section: why headless runs must
+  go through the harness (the kitty-probe requirement), benchmark and
+  menu-driving examples, baseline fps numbers, the debug build invocation, and
+  the rm -rf build bin rule when switching targets.
+  - CLAUDE.md — build commands and the shared-build-dir gotcha, the
+  never-exec-directly-without-a-pty rule, testing workflow, an architecture map
+  of the three fork files, the two local patches to upstream code to watch
+  during upstream merges, and code-style conventions.
+
+  I also smoke-tested the relocated scripts from their new paths (harness
+  captured 36 MB, decoder produced a valid frame) before committing, and updated
+  the project memory to point at the repo scripts instead of the scratchpad.
+
+✻ Cooked for 2m 40s

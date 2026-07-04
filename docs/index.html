@@ -339,6 +339,7 @@
     </div>
     <div class="toplinks">
       <a href="#how">How it works</a>
+      <a href="#log">Build log</a>
       <a href="#run">Run it</a>
       <a href="https://github.com/pixelbadger/AnsiQuake">GitHub</a>
     </div>
@@ -363,7 +364,7 @@
     <div class="term-shell">
       <div class="term-titlebar">
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="path">ben@linux:~/AnsiQuake$ ./bin/tyr-quake</span>
+        <span class="path">player@linux:~/AnsiQuake$ ./bin/tyr-quake</span>
       </div>
       <video autoplay muted loop playsinline controls preload="metadata">
         <source src="assets/demo.webm" type="video/webm">
@@ -461,6 +462,66 @@
         </p>
       </div>
     </div>
+  </div>
+</section>
+
+<section id="log">
+  <div class="wrap">
+    <p class="eyebrow">How this got built</p>
+    <h2>One prompt. One autonomous session. A working Quake port.</h2>
+    <p class="lede">
+      The entire engine port — plan, three new driver files, upstream
+      patches, and a headless verification harness — came out of a single
+      opening prompt to Claude Code, working unattended from an empty
+      repository to a running build.
+    </p>
+
+    <div class="code-block">
+      <pre><span class="c1"># the opening prompt, verbatim</span>
+<span class="prompt">❯</span> Produce a new renderer for the game quake. The only catch is it has to use an
+  ANSI terminal. Use the ascii half-block to double addressable pixel size.
+  This needs to run at original speeds. Use your own judgement when planning
+  this, and particularly when spawning subagents. There are no language
+  constraints, and you're free to fork from an existing open source project.
+  Let's plan this perfectly.</pre>
+    </div>
+
+    <div class="grid3" style="margin-top:20px;">
+      <div class="card">
+        <span class="tag">session</span>
+        <h3>~25 minutes, start to finish</h3>
+        <p>
+          Planned and built autonomously in a single sitting — <code>Baked
+          for 25m 14s</code> — from an empty directory to a playable,
+          verified build.
+        </p>
+      </div>
+      <div class="card">
+        <span class="tag">history</span>
+        <h3>4 commits, empty repo → working game</h3>
+        <p>
+          Driver code, a <code>.gitignore</code> and upstream sound-crash
+          fix, packaging (README, <code>make terminal</code>, the shareware
+          fetch script), and the headless test tooling each landed as their
+          own commit on top of stock TyrQuake history.
+        </p>
+      </div>
+      <div class="card">
+        <span class="tag">verification</span>
+        <h3>332 fps, headlessly, in a pty</h3>
+        <p>
+          With no real terminal available in the session, a Python pty
+          harness drove the game directly: <code>timedemo demo1</code> at a
+          240×67 cell grid sustained 332 fps — 4.6× the engine's 72 fps cap.
+        </p>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top:28px;margin-bottom:0;">
+      Curious how it actually went? Read the
+      <a href="build-log.txt">full transcript</a> — every plan,
+      subagent, patch, and benchmark run, in order.
+    </p>
   </div>
 </section>
 
