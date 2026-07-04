@@ -23,4 +23,5 @@ if [ "$COLS" -lt 320 ] || [ "$((ROWS * 2))" -lt 200 ]; then
 fi
 
 exec foot -f "monospace:pixelsize=$PIXELSIZE" -W "${COLS}x${ROWS}" \
-    -e "$BASEDIR/bin/tyr-quake" -basedir "$BASEDIR" "$@"
+    -e sh -c '"$@"; exec "${SHELL:-sh}"' sh \
+    "$BASEDIR/bin/tyr-quake" -basedir "$BASEDIR" "$@"
