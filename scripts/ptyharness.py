@@ -76,7 +76,7 @@ with open(OUTFILE, "wb") as out:
         # deliver scripted input
         while events and time.time() - start >= events[0][0]:
             os.write(master, events.pop(0)[1])
-        r, _, _ = select.select([master], [], [], 0.05)
+        r, _, _ = select.select([master], [], [], 0.005)
         if master in r:
             try:
                 data = os.read(master, 1 << 20)

@@ -20,6 +20,7 @@ See the GNU General Public License for more details.
 // bottom pixel.  Only cells that changed since the previous frame are
 // re-emitted, wrapped in synchronized-update guards to avoid tearing.
 
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -86,6 +87,53 @@ static byte term_bg_len[256];
 #define TERM_FRAME_BUDGET (1.0 / 72.0)
 #define TERM_SYNC_BEGIN "\033[?2026h"
 #define TERM_SYNC_END   "\033[?2026l"
+
+/*
+ * Per-frame benchmark stats, enabled with QSTATS=<file> in the environment
+ * (analyzed by scripts/benchstats.py).  One CSV record per VID_Update call.
+ * Records go out through a raw write() per frame so they survive the
+ * SIGTERM/fatal-signal exit path, which never flushes stdio.
+ */
+static int term_stats_fd = -2;	/* -2 = QSTATS not checked yet, -1 = off */
+static int term_stats_frame;
+static double term_stats_epoch;
+
+static void
+TERM_StatsOpen(void)
+{
+    const char *path = getenv("QSTATS");
+    char header[128];
+    int len;
+
+    term_stats_fd = -1;
+    if (!path || !*path)
+	return;
+    term_stats_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (term_stats_fd < 0)
+	return;
+    len = snprintf(header, sizeof(header),
+		   "# cols=%d rows=%d render=%dx%d\n"
+		   "frame,ms,changed,bytes,gen_us,write_us,skipped\n",
+		   term_cols, term_rows, vid.width, vid.height);
+    write(term_stats_fd, header, len);
+    term_stats_epoch = Sys_DoubleTime();
+}
+
+static void
+TERM_StatsRecord(int changed, int bytes, double gen, double wr, int skipped)
+{
+    char line[96];
+    int len;
+
+    if (term_stats_fd < 0)
+	return;
+    len = snprintf(line, sizeof(line), "%d,%.1f,%d,%d,%d,%d,%d\n",
+		   term_stats_frame++,
+		   (Sys_DoubleTime() - term_stats_epoch) * 1000.0,
+		   changed, bytes,
+		   (int)(gen * 1e6), (int)(wr * 1e6), skipped);
+    write(term_stats_fd, line, len);
+}
 
 void
 VID_GetDesktopRect(vrect_t *rect)
@@ -459,10 +507,14 @@ void
 VID_Update(vrect_t *rects)
 {
     int r, c, cur_fg, cur_bg, cur_row, cur_col;
+    int changed;
     uint16_t *cell;
     char *p;
-    double start;
+    double start, gen_start;
     qboolean any;
+
+    if (term_stats_fd == -2)
+	TERM_StatsOpen();
 
     if (term_wipe_pending) {
 	if (term_wipe_w == term_cols && term_wipe_h == term_rows)
@@ -493,10 +545,12 @@ VID_Update(vrect_t *rects)
     if (term_write_time > TERM_FRAME_BUDGET && !term_skipped_last && !term_dirty_all) {
 	term_skipped_last = true;
 	term_write_time = 0;
+	TERM_StatsRecord(0, 0, 0, 0, 1);
 	return;
     }
     term_skipped_last = false;
 
+    gen_start = Sys_DoubleTime();
     p = term_outbuf;
     memcpy(p, TERM_SYNC_BEGIN, sizeof(TERM_SYNC_BEGIN) - 1);
     p += sizeof(TERM_SYNC_BEGIN) - 1;
@@ -504,6 +558,7 @@ VID_Update(vrect_t *rects)
     cur_fg = cur_bg = -1;
     cur_row = cur_col = -1;
     any = false;
+    changed = 0;
     cell = term_cells;
 
     for (r = 0; r < term_rows; r++) {
@@ -519,6 +574,7 @@ VID_Update(vrect_t *rects)
 		continue;
 	    *cell = value;
 	    any = true;
+	    changed++;
 
 	    if (r != cur_row || c != cur_col) {
 		*p++ = '\033';
@@ -572,6 +628,7 @@ VID_Update(vrect_t *rects)
 
     if (!any) {
 	term_write_time = 0;
+	TERM_StatsRecord(0, 0, Sys_DoubleTime() - gen_start, 0, 0);
 	return;
     }
 
@@ -581,6 +638,8 @@ VID_Update(vrect_t *rects)
     start = Sys_DoubleTime();
     TTY_Write(term_outbuf, p - term_outbuf);
     term_write_time = Sys_DoubleTime() - start;
+    TERM_StatsRecord(changed, p - term_outbuf, start - gen_start,
+		     term_write_time, 0);
 }
 
 void

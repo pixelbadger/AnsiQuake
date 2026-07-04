@@ -103,11 +103,67 @@ stream). Needs `python3-pil`.
 scripts/ansidecode.py cap.bin 240 67 0.3,0.7,0.98
 ```
 
-Baseline numbers (2026, 8-core x86-64, pty harness): `timedemo demo1` runs
-332 fps at 240×67 cells and ~72 fps at an extreme 800×200; normal play is
-capped by the engine at 72 fps, the original Quake speed limit. Harness fps
-at very large grids is drain-rate limited (pty buffer + select polling), so
-it understates real terminal performance.
+## Performance
+
+Set `QSTATS=<file>` and the video driver logs one CSV record per frame:
+cells changed, bytes emitted, time spent generating ANSI, time blocked in
+`write()`, and whether the frame was dropped for backpressure. Three tools
+build on it:
+
+```sh
+QSTATS=stats.csv QCOLS=340 QROWS=110 QTIME=30 QOUT=/dev/null \
+    scripts/ptyharness.py ./bin/tyr-quake -basedir . -nosound +playdemo demo1
+scripts/benchstats.py stats.csv        # summarize one run
+scripts/benchmark.py                   # headless matrix -> bench/headless-*/
+scripts/benchterm.py                   # real emulators   -> bench/terms-*/
+```
+
+`benchmark.py` runs a grid-size matrix in two modes — `+timedemo`
+(uncapped stress) and `+playdemo` (real-time gameplay at the engine's
+72 fps cap). `benchterm.py` runs the timedemo inside real terminal
+windows (foot, kitty, wezterm, ghostty, alacritty ≥ 0.13) and samples
+terminal and engine CPU from `/proc`, plus GPU busy% where counters
+exist, to tell CPU-bound from GPU-bound emulators.
+
+Numbers from an 8-core i3-1215U (pty harness, so write timings are
+kernel-buffer drain, not a real terminal):
+
+| grid | mode | engine fps | bytes/frame p50 | MB/s | cells changed p50 | ansi gen |
+|---|---|---|---|---|---|---|
+| 240×67 | timedemo | 430 | 265 KB | 108 | 100% | 464 µs |
+| 240×67 | playdemo | 72 | 229 KB | 15 | 70% | 419 µs |
+| 340×110 | timedemo | 217 | 545 KB | 113 | 100% | 1.0 ms |
+| 340×110 | playdemo | 72 | 480 KB | 33 | 71% | 0.9 ms |
+| 800×200 | timedemo | 86 | 1.5 MB | 122 | 91% | 3.0 ms |
+| 800×200 | playdemo | 66 | 1.5 MB | 88 | 79% | 3.2 ms |
+
+The headline: at a typical maximized grid (340×110), real-time gameplay
+holds the full 72 fps while emitting ~33 MB/s of ANSI. A median gameplay
+frame touches ~70% of cells — Quake's camera is almost always moving, so
+per-cell diffing pays off less during combat than you'd hope (its real
+wins are the HUD, console, and encoding: ~17 bytes per changed cell
+thanks to SGR run-elision). ANSI generation costs about 1 ms per frame;
+the dominant cost is the terminal consuming the stream, which is why
+frame drops only appear at extreme grids (800×200) where a single frame
+approaches 1.5 MB.
+
+The same timedemo inside real emulator windows (`benchterm.py`, same
+machine — a ChromeOS Crostini VM, so no GPU counters and everything
+renders through virtio-gpu):
+
+| terminal | timedemo fps | dropped | stream | engine CPU | terminal CPU |
+|---|---|---|---|---|---|
+| foot 1.13 | 227 | 0% | 117 MB/s | 48% | 112% |
+| kitty 0.26 | 75 | 12% | 25 MB/s | 14% | 251% |
+
+The emulator, not the game, is the bottleneck: foot consumes 117 MB/s of
+SGR-dense ANSI on a bit over one core — faster than a raw pty drain on
+the same box — while kitty 0.26 saturates two and a half cores yet
+throttles the engine to 75 fps, leaving it blocked in `write()` for 90%
+of wall time. On hardware that exposes utilization counters (amdgpu
+sysfs, `intel_gpu_top`, `nvidia-smi`), `benchterm.py` also reports GPU
+busy% per run, separating emulators that are CPU-bound in their vt/parser
+from ones that are GPU-bound in glyph compositing.
 
 To play interactively rather than run headless, `scripts/run-foot.sh`
 launches a real [foot](https://codeberg.org/dnkl/foot) window pre-sized so

@@ -36,9 +36,30 @@ scripts/ansidecode.py cap.bin 240 67 0.5   # capture -> frame_050.png to eyeball
 - Game data `id1/pak0.pak` is gitignored; restore with
   `scripts/fetch-shareware.sh` (GWDG mirror of ftp.idsoftware.com).
 - Performance target: normal play must hold the engine's 72 fps cap
-  (`NQ/host.c`, 1/72s frame gate). Reference: 332 fps timedemo at 240×67.
+  (`NQ/host.c`, 1/72s frame gate). Reference: ~450 fps timedemo at 240×67.
 - Harness fps numbers at very large grids are drain-rate limited (pty
-  buffer + 50ms select), so they understate real terminal performance.
+  buffer + 5ms select), so they understate real terminal performance.
+
+## Benchmarking
+
+`QSTATS=file` makes the vid driver append one CSV record per frame
+(changed cells, bytes emitted, ANSI-generation µs, tty-write µs, skipped
+flag) via raw per-frame `write()` — survives the SIGTERM exit path.
+Zero-cost when unset. Tooling on top of it:
+
+- `scripts/benchstats.py stats.csv` — per-run summary (bytes/frame,
+  %cells changed, gen vs write time). Auto-trims to the demo window;
+  `--json` for machine use, `--all` to skip trimming.
+- `scripts/benchmark.py` — headless matrix (grid sizes × timedemo/
+  playdemo) via ptyharness; report in `bench/headless-*/summary.md`.
+  Byte/cell stats are terminal-independent; write timings are pty drain.
+- `scripts/benchterm.py [terms]` — runs timedemo in real emulators on the
+  current display, samples terminal+engine CPU from /proc and GPU busy%
+  where counters exist (amdgpu sysfs / intel_gpu_top / nvidia-smi);
+  report in `bench/terms-*/summary.md`. Needs kitty-protocol terminals
+  (alacritty ≥ 0.13 — the script version-checks and skips otherwise).
+  Don't run it concurrently with other benchmarks — both share
+  `./console.log` to detect timedemo completion.
 
 ## Running interactively
 
