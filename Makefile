@@ -960,7 +960,7 @@ SW_OBJS += vid_null.o
 GL_OBJS += vid_null.o
 endif
 ifeq ($(VID_TARGET),term)
-SW_OBJS += vid_term.o term_tty.o
+SW_OBJS += vid_term.o term_tty.o term_intro.o
 endif
 
 # ----------------

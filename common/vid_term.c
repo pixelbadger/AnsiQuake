@@ -24,6 +24,7 @@ See the GNU General Public License for more details.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "cmd.h"
 #include "common.h"
@@ -38,6 +39,7 @@ See the GNU General Public License for more details.
 #include "quakedef.h"
 #include "screen.h"
 #include "sys.h"
+#include "term_intro.h"
 #include "term_tty.h"
 #include "vid.h"
 #include "view.h"
@@ -69,6 +71,11 @@ static char *term_outbuf;
 static qboolean term_dirty_all;
 static qboolean term_skipped_last;
 static double term_write_time;	/* seconds spent writing the previous frame */
+
+/* Startup intro -> game melt transition (see TERM_DoWipe) */
+static byte *term_wipe_src;	/* RGB888, term_wipe_w x term_wipe_h*2 */
+static int term_wipe_w, term_wipe_h;
+static qboolean term_wipe_pending;
 
 /* Precomputed SGR fragments per palette index: "38;2;R;G;B" / "48;2;R;G;B" */
 static char term_fg_sgr[256][20];
@@ -277,7 +284,10 @@ void
 VID_Init(const byte *palette)
 {
     TTY_Init();
+    term_wipe_src = TERM_PlayIntro(&term_wipe_w, &term_wipe_h);
+
     VID_SetMode(&vid_windowed_mode, palette);
+    term_wipe_pending = term_wipe_src != NULL;
 
     /* Resolution is dictated by the terminal; no video menu */
     vid_menudrawfn = NULL;
@@ -310,6 +320,141 @@ TERM_PutNum(char *p, int num)
     return p;
 }
 
+/*
+ * Classic Doom "melt": each column drips from the outgoing (intro) image
+ * to the incoming (first real game) image at its own randomized rate.
+ * Runs synchronously for its ~1s duration -- there is nothing else for the
+ * engine to be doing at this point in startup.
+ */
+static inline unsigned
+TERM_WipeSrcPixel(int col, int y)
+{
+    const byte *p = term_wipe_src + (size_t)(y * term_wipe_w + col) * 3;
+
+    return ((unsigned)p[0] << 16) | ((unsigned)p[1] << 8) | p[2];
+}
+
+static void
+TERM_DoWipe(void)
+{
+    int width = term_wipe_w;
+    int height = term_wipe_h * 2;
+    int *dy;
+    int i, r, c, done;
+
+    dy = malloc(width * sizeof(*dy));
+    if (!dy)
+	return;
+
+    dy[0] = -(rand() % 16);
+    for (i = 1; i < width; i++) {
+	int step = (rand() % 3) - 1;
+	dy[i] = dy[i - 1] + step;
+	if (dy[i] > 0) dy[i] = 0;
+	if (dy[i] < -15) dy[i] = -15;
+    }
+
+    do {
+	char *p = term_outbuf;
+	int cur_fr = -1, cur_fg = -1, cur_fb = -1;
+	int cur_br = -1, cur_bg = -1, cur_bb = -1;
+	int cur_row = -1, cur_col = -1;
+
+	done = 1;
+	for (i = 0; i < width; i++) {
+	    if (dy[i] < 0) {
+		dy[i]++;
+		done = 0;
+		continue;
+	    }
+	    if (dy[i] < height) {
+		int step = (dy[i] < 16) ? dy[i] + 1 : 8;
+		if (dy[i] + step > height)
+		    step = height - dy[i];
+		dy[i] += step;
+		done = 0;
+	    }
+	}
+
+	memcpy(p, TERM_SYNC_BEGIN, sizeof(TERM_SYNC_BEGIN) - 1);
+	p += sizeof(TERM_SYNC_BEGIN) - 1;
+
+	for (r = 0; r < term_wipe_h; r++) {
+	    const byte *new_top = vid.buffer + term_ymap[r * 2] * vid.rowbytes;
+	    const byte *new_bot = vid.buffer + term_ymap[r * 2 + 1] * vid.rowbytes;
+
+	    for (c = 0; c < width; c++) {
+		/* Columns still in their randomized holdback (dy < 0) show
+		   the old frame completely undisturbed. */
+		int edy = (dy[c] < 0) ? 0 : dy[c];
+		int py0 = r * 2, py1 = r * 2 + 1;
+		int oy0 = py0 - edy, oy1 = py1 - edy;
+		unsigned top_rgb, bot_rgb;
+		int tr, tg, tb, br, bg, bb;
+
+		top_rgb = (py0 < edy || oy0 >= height)
+		    ? d_8to24table[new_top[term_xmap[c]]]
+		    : TERM_WipeSrcPixel(c, oy0);
+		bot_rgb = (py1 < edy || oy1 >= height)
+		    ? d_8to24table[new_bot[term_xmap[c]]]
+		    : TERM_WipeSrcPixel(c, oy1);
+
+		if (r != cur_row || c != cur_col) {
+		    *p++ = '\033';
+		    *p++ = '[';
+		    p = TERM_PutNum(p, r + 1);
+		    *p++ = ';';
+		    p = TERM_PutNum(p, c + 1);
+		    *p++ = 'H';
+		    cur_row = r;
+		    cur_col = c;
+		}
+
+		tr = (top_rgb >> 16) & 0xff;
+		tg = (top_rgb >> 8) & 0xff;
+		tb = top_rgb & 0xff;
+		br = (bot_rgb >> 16) & 0xff;
+		bg = (bot_rgb >> 8) & 0xff;
+		bb = bot_rgb & 0xff;
+
+		if (tr == br && tg == bg && tb == bb) {
+		    if (cur_br != br || cur_bg != bg || cur_bb != bb) {
+			p += sprintf(p, "\033[48;2;%d;%d;%dm", br, bg, bb);
+			cur_br = br;
+			cur_bg = bg;
+			cur_bb = bb;
+		    }
+		    *p++ = ' ';
+		} else {
+		    if (cur_fr != tr || cur_fg != tg || cur_fb != tb ||
+			cur_br != br || cur_bg != bg || cur_bb != bb) {
+			p += sprintf(p, "\033[38;2;%d;%d;%d;48;2;%d;%d;%dm",
+				     tr, tg, tb, br, bg, bb);
+			cur_fr = tr;
+			cur_fg = tg;
+			cur_fb = tb;
+			cur_br = br;
+			cur_bg = bg;
+			cur_bb = bb;
+		    }
+		    *p++ = '\xe2';
+		    *p++ = '\x96';
+		    *p++ = '\x80';
+		}
+		cur_col++;
+	    }
+	}
+
+	memcpy(p, TERM_SYNC_END, sizeof(TERM_SYNC_END) - 1);
+	p += sizeof(TERM_SYNC_END) - 1;
+
+	TTY_Write(term_outbuf, p - term_outbuf);
+	usleep(1000000 / 35);
+    } while (!done);
+
+    free(dy);
+}
+
 void
 VID_Update(vrect_t *rects)
 {
@@ -318,6 +463,16 @@ VID_Update(vrect_t *rects)
     char *p;
     double start;
     qboolean any;
+
+    if (term_wipe_pending) {
+	if (term_wipe_w == term_cols && term_wipe_h == term_rows)
+	    TERM_DoWipe();
+	free(term_wipe_src);
+	term_wipe_src = NULL;
+	term_wipe_pending = false;
+	term_dirty_all = true;
+	return;
+    }
 
     if (TTY_CheckResume())
 	term_dirty_all = true;
