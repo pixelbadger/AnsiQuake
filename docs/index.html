@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnsiQuake — Quake, rendered in your terminal</title>
+<meta name="description" content="A fork of TyrQuake that renders full-speed Quake to any truecolor ANSI terminal using half-block pixels — no SDL video, just termios and ANSI escapes.">
+<link rel="icon" href="assets/tyrquake-icon.png">
+<style>
+  :root{
+    --bg:#080a0c;
+    --bg-raised:#0e1114;
+    --panel:#12161a;
+    --border:#232a30;
+    --text:#c9d1d3;
+    --text-dim:#7a8890;
+    --green:#39ff88;
+    --cyan:#4ad9ff;
+    --amber:#ffb454;
+    --magenta:#ff6ec7;
+    --red:#ff5f5f;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f5;
+    --bg-raised:#ffffff;
+    --panel:#ffffff;
+    --border:#d8dee1;
+    --text:#1b2226;
+    --text-dim:#5b6870;
+    --green:#0f9d58;
+    --cyan:#0b84a5;
+    --amber:#b06a00;
+    --magenta:#a83279;
+    --red:#c0392b;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#f4f6f5;
+      --bg-raised:#ffffff;
+      --panel:#ffffff;
+      --border:#d8dee1;
+      --text:#1b2226;
+      --text-dim:#5b6870;
+      --green:#0f9d58;
+      --cyan:#0b84a5;
+      --amber:#b06a00;
+      --magenta:#a83279;
+      --red:#c0392b;
+    }
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--mono);
+    line-height:1.6;
+    overflow-x:hidden;
+  }
+  a{color:var(--cyan);}
+  a:hover{color:var(--green);}
+
+  .scanlines{
+    pointer-events:none;
+    position:fixed;
+    inset:0;
+    z-index:50;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0.055) 0px,
+      rgba(0,0,0,0.055) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode:multiply;
+    opacity:0.5;
+  }
+  :root[data-theme="light"] .scanlines{opacity:0.12;}
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]) .scanlines{opacity:0.12;}
+  }
+
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:18px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:0.02em;}
+  .brand img{width:26px;height:26px;image-rendering:auto;filter:drop-shadow(0 0 6px rgba(57,255,136,0.35));}
+  .brand .dim{color:var(--text-dim);font-weight:400;}
+  .toplinks{display:flex;gap:20px;font-size:0.9rem;}
+  .toplinks a{text-decoration:none;color:var(--text-dim);}
+  .toplinks a:hover{color:var(--green);}
+
+  /* ---------- hero ---------- */
+  .hero{padding:64px 0 40px;text-align:center;}
+  .kicker{
+    display:inline-block;
+    font-size:0.78rem;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--green);
+    border:1px solid var(--border);
+    background:var(--bg-raised);
+    padding:5px 12px;
+    border-radius:999px;
+    margin-bottom:22px;
+  }
+  h1.title{
+    font-size:clamp(2.4rem, 7vw, 4.6rem);
+    line-height:1.05;
+    margin:0 0 18px;
+    letter-spacing:-0.01em;
+  }
+  h1.title .rainbow{
+    background:linear-gradient(90deg, var(--cyan), var(--green) 35%, var(--amber) 65%, var(--magenta));
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .cursor{
+    display:inline-block;
+    width:0.5em;height:0.85em;
+    background:var(--green);
+    margin-left:4px;
+    transform:translateY(0.08em);
+    animation:blink 1s steps(1) infinite;
+  }
+  @keyframes blink{ 50%{opacity:0;} }
+
+  .subtitle{
+    max-width:640px;margin:0 auto 34px;
+    color:var(--text-dim);
+    font-size:1.05rem;
+  }
+  .subtitle strong{color:var(--text);font-weight:600;}
+
+  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:8px;}
+  .btn{
+    font-family:var(--mono);
+    text-decoration:none;
+    padding:11px 20px;
+    border-radius:8px;
+    font-size:0.92rem;
+    font-weight:600;
+    border:1px solid var(--border);
+    transition:transform .15s ease, border-color .15s ease, background .15s ease;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .btn:hover{transform:translateY(-1px);}
+  .btn-primary{background:var(--green);color:#04140a;border-color:var(--green);}
+  .btn-primary:hover{background:var(--cyan);border-color:var(--cyan);color:#04140a;}
+  .btn-ghost{color:var(--text);background:var(--bg-raised);}
+  .btn-ghost:hover{border-color:var(--green);color:var(--green);}
+
+  /* ---------- terminal window / video ---------- */
+  .term-shell{
+    margin:48px auto 0;
+    max-width:960px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+    background:var(--bg-raised);
+    box-shadow:0 30px 80px -30px rgba(57,255,136,0.18), 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .term-titlebar{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 14px;
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+  }
+  .dot{width:11px;height:11px;border-radius:50%;}
+  .dot.r{background:var(--red);}
+  .dot.y{background:var(--amber);}
+  .dot.g{background:var(--green);}
+  .term-titlebar span.path{
+    margin:0 auto;
+    color:var(--text-dim);
+    font-size:0.82rem;
+  }
+  video{display:block;width:100%;height:auto;background:#000;}
+
+  .term-caption{
+    display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    padding:10px 16px;
+    font-size:0.8rem;
+    color:var(--text-dim);
+    background:var(--panel);
+    border-top:1px solid var(--border);
+  }
+  .term-caption b{color:var(--green);}
+
+  /* ---------- section titles ---------- */
+  section{padding:72px 0;}
+  section.tight{padding-top:0;}
+  .eyebrow{
+    color:var(--green);
+    font-size:0.78rem;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    margin:0 0 10px;
+  }
+  h2{
+    font-size:clamp(1.5rem,3.4vw,2.1rem);
+    margin:0 0 14px;
+  }
+  .lede{color:var(--text-dim);max-width:680px;margin:0 0 40px;}
+
+  /* ---------- stats ---------- */
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:1px;
+    background:var(--border);
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+  }
+  .stat{background:var(--bg-raised);padding:26px 18px;text-align:center;}
+  .stat .num{
+    font-size:1.9rem;font-weight:700;
+    background:linear-gradient(90deg,var(--green),var(--cyan));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .stat .label{color:var(--text-dim);font-size:0.78rem;margin-top:6px;letter-spacing:0.03em;}
+
+  /* ---------- how it works ---------- */
+  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;}
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:22px 22px 24px;
+  }
+  .card .tag{
+    display:inline-block;
+    font-size:0.72rem;
+    color:var(--amber);
+    background:rgba(255,180,84,0.09);
+    border:1px solid rgba(255,180,84,0.25);
+    padding:2px 8px;border-radius:6px;
+    margin-bottom:12px;
+  }
+  .card h3{margin:0 0 10px;font-size:1.05rem;}
+  .card p{margin:0;color:var(--text-dim);font-size:0.92rem;}
+  .card code{color:var(--cyan);background:transparent;}
+
+  /* ---------- pixel diagram ---------- */
+  .halfblock-demo{
+    display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:26px;
+    margin-top:20px;
+  }
+  .hb-cell{
+    width:64px;height:64px;
+    border-radius:6px;
+    overflow:hidden;
+    border:1px solid var(--border);
+    flex:none;
+  }
+  .hb-top{height:50%;background:var(--cyan);}
+  .hb-bottom{height:50%;background:var(--magenta);}
+  .halfblock-demo .desc{color:var(--text-dim);font-size:0.92rem;flex:1;min-width:220px;}
+  .halfblock-demo .desc code{color:var(--green);}
+
+  /* ---------- requirements ---------- */
+  .req-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;}
+  .req-list li{
+    background:var(--bg-raised);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 16px;
+    font-size:0.9rem;
+    color:var(--text-dim);
+  }
+  .req-list li b{color:var(--text);display:block;margin-bottom:2px;font-size:0.85rem;}
+
+  /* ---------- install ---------- */
+  .code-block{
+    background:#000;
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:20px 22px;
+    overflow-x:auto;
+    font-size:0.86rem;
+    position:relative;
+  }
+  :root[data-theme="light"] .code-block{background:#12161a;}
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]) .code-block{background:#12161a;}
+  }
+  .code-block pre{margin:0;color:#d8f0e0;}
+  .code-block .c1{color:var(--text-dim);}
+  .code-block .prompt{color:var(--green);}
+  .copy-btn{
+    position:absolute;top:12px;right:12px;
+    font-family:var(--mono);
+    font-size:0.72rem;
+    color:var(--text-dim);
+    background:rgba(255,255,255,0.06);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:4px 9px;
+    cursor:pointer;
+  }
+  .copy-btn:hover{color:var(--green);border-color:var(--green);}
+
+  /* ---------- footer ---------- */
+  footer{
+    border-top:1px solid var(--border);
+    padding:32px 0 60px;
+    color:var(--text-dim);
+    font-size:0.85rem;
+  }
+  footer .foot-row{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+  footer a{color:var(--text-dim);text-decoration:none;}
+  footer a:hover{color:var(--green);}
+
+  ::selection{background:var(--green);color:#04140a;}
+</style>
+</head>
+<body>
+<div class="scanlines" aria-hidden="true"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <img src="assets/tyrquake-icon.png" alt="">
+      <span>AnsiQuake</span>
+      <span class="dim">/ Quake in a terminal</span>
+    </div>
+    <div class="toplinks">
+      <a href="#how">How it works</a>
+      <a href="#run">Run it</a>
+      <a href="https://github.com/pixelbadger/AnsiQuake">GitHub</a>
+    </div>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="kicker">id1/pak0.pak → your tty</span>
+    <h1 class="title">Quake, rendered<br><span class="rainbow">entirely in ANSI</span><span class="cursor"></span></h1>
+    <p class="subtitle">
+      A fork of <strong>TyrQuake</strong> that pushes the original software
+      renderer straight into a truecolor terminal — <strong>no SDL video,
+      no framebuffer, no X server</strong>. Just termios, escape codes, and
+      72 frames per second of demons rendered in half-block pixels.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#run">$ make terminal</a>
+      <a class="btn btn-ghost" href="https://github.com/pixelbadger/AnsiQuake">View source →</a>
+    </div>
+
+    <div class="term-shell">
+      <div class="term-titlebar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="path">ben@linux:~/AnsiQuake$ ./bin/tyr-quake</span>
+      </div>
+      <video autoplay muted loop playsinline controls preload="metadata">
+        <source src="assets/demo.webm" type="video/webm">
+        Your browser can't play this video — grab the source and run it
+        yourself, it's better in person.
+      </video>
+      <div class="term-caption">
+        <span>Captured live — real gameplay, no post-processing</span>
+        <span><b>240×67</b> cells &nbsp;·&nbsp; truecolor half-blocks &nbsp;·&nbsp; kitty keyboard protocol</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="tight">
+  <div class="wrap">
+    <div class="stats">
+      <div class="stat"><div class="num">332</div><div class="label">fps · timedemo @ 240×67</div></div>
+      <div class="stat"><div class="num">72</div><div class="label">fps · engine's own speed cap</div></div>
+      <div class="stat"><div class="num">2×</div><div class="label">vertical res via half-blocks</div></div>
+      <div class="stat"><div class="num">16.7M</div><div class="label">colors · truecolor SGR</div></div>
+      <div class="stat"><div class="num">0</div><div class="label">SDL video calls</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="what">
+  <div class="wrap">
+    <p class="eyebrow">What this actually is</p>
+    <h2>Not a screenshot filter. A real video driver.</h2>
+    <p class="lede">
+      AnsiQuake replaces TyrQuake's SDL video and input backends with a pure
+      termios/ANSI implementation. Every character cell on your terminal
+      displays <em>two</em> vertically-stacked pixels using the Unicode
+      half-block <code>▀</code> (U+2580): the foreground color carries the
+      top pixel, the background color carries the bottom — doubling the
+      terminal's effective vertical resolution for free.
+    </p>
+
+    <div class="halfblock-demo">
+      <div class="hb-cell"><div class="hb-top"></div><div class="hb-bottom"></div></div>
+      <div class="desc">
+        One glyph, two pixels. <code>fg = 38;2;R;G;B</code> paints the top
+        pixel, <code>bg = 48;2;R;G;B</code> paints the bottom — a single
+        <code>▀</code> per cell reproduces a 2×1 truecolor image with no
+        subpixel trickery, just SGR escape sequences your terminal already
+        understands.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <p class="eyebrow">How it works</p>
+    <h2>Three small drivers, zero graphics stack</h2>
+    <p class="lede">
+      Everything else — the renderer, physics, netcode, sound mixing — is
+      stock TyrQuake (software-renderer / WinQuake lineage). Only the video
+      and input layers change.
+    </p>
+    <div class="grid3">
+      <div class="card">
+        <span class="tag">video</span>
+        <h3><code>common/vid_term.c</code></h3>
+        <p>
+          Samples the 8-bit palettized software framebuffer down into a
+          <code>(top, bottom)</code> cell grid, diffs against the previous
+          frame, and emits only the cells that changed — with SGR state
+          elision and <code>CSI ?2026</code> synchronized updates so the
+          terminal never tears. Drops at most every other frame if the tty
+          can't keep pace, so the engine itself never slows down.
+        </p>
+      </div>
+      <div class="card">
+        <span class="tag">input</span>
+        <h3><code>common/in_term.c</code></h3>
+        <p>
+          Parses <a href="https://sw.kovidgoyal.net/kitty/keyboard-protocol/">kitty
+          keyboard protocol</a> CSI sequences into Quake's native key
+          press/repeat/release events — the protocol extension that makes
+          WASD movement possible at all, since plain terminal input can't
+          tell you when a key comes back <em>up</em>.
+        </p>
+      </div>
+      <div class="card">
+        <span class="tag">tty</span>
+        <h3><code>common/term_tty.c</code></h3>
+        <p>
+          Owns the terminal end-to-end: raw mode, alternate screen, kitty
+          protocol probing, redirecting stdout to <code>console.log</code>,
+          and async-signal-safe restoration on <em>every</em> exit path —
+          fatal signals, <code>SIGTSTP</code>/<code>SIGCONT</code>, crashes,
+          <code>kill</code>. Your shell always comes back clean.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="requirements">
+  <div class="wrap">
+    <p class="eyebrow">Before you run it</p>
+    <h2>What your terminal needs</h2>
+    <ul class="req-list">
+      <li><b>Truecolor</b>24-bit SGR color support (nearly every modern emulator)</li>
+      <li><b>Kitty keyboard protocol</b>kitty, ghostty, wezterm, foot, or alacritty ≥ 0.13</li>
+      <li><b>A real tty</b>tmux and screen sessions aren't supported — the protocol doesn't pass through</li>
+      <li><b>≥ 320×200 pixel grid</b>cols × 2·rows; below that the renderer downsamples and text gets garbled</li>
+    </ul>
+  </div>
+</section>
+
+<section id="run">
+  <div class="wrap">
+    <p class="eyebrow">Try it yourself</p>
+    <h2>Up and running in four commands</h2>
+    <div class="code-block">
+      <button class="copy-btn" onclick="copyInstall(this)">copy</button>
+      <pre id="install-cmd"><span class="c1"># needs libsdl2-dev (sound only — video is never touched)</span>
+<span class="prompt">$</span> git clone https://github.com/pixelbadger/AnsiQuake.git
+<span class="prompt">$</span> cd AnsiQuake
+<span class="prompt">$</span> make terminal              <span class="c1"># builds bin/tyr-quake</span>
+<span class="prompt">$</span> scripts/fetch-shareware.sh  <span class="c1"># pulls id1/pak0.pak (shareware ep.)</span>
+<span class="prompt">$</span> ./bin/tyr-quake</pre>
+    </div>
+    <p class="lede" style="margin-top:22px;">
+      Resizing mid-game works. Quit from the menu, or hit
+      <b>Ctrl+C three times within a second</b> for an emergency exit — the
+      terminal is restored no matter how the process dies.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-row">
+      <span>AnsiQuake — GPLv2, same license as id Software's Quake source and TyrQuake.</span>
+      <span>
+        <a href="https://github.com/pixelbadger/AnsiQuake">github.com/pixelbadger/AnsiQuake</a>
+        &nbsp;·&nbsp;
+        <a href="https://disenchant.net/tyrquake/">upstream TyrQuake</a>
+      </span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  function copyInstall(btn){
+    var text = document.getElementById('install-cmd').innerText;
+    navigator.clipboard.writeText(text).then(function(){
+      var old = btn.textContent;
+      btn.textContent = 'copied!';
+      setTimeout(function(){ btn.textContent = old; }, 1400);
+    });
+  }
+</script>
+</body>
+</html>
